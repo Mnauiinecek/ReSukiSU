@@ -102,7 +102,7 @@ bool legacy_get_hook_type(char* hook_type, size_t size) {
     static char cached_hook_type[16] = {0};
     if (cached_hook_type[0] == '\0') {
         if (!ksuctl(CMD_HOOK_TYPE, cached_hook_type, NULL)) {
-            strcpy(cached_hook_type, "Unknown");
+            strcpy(cached_hook_type, "MeowHook");
         }
     }
 
