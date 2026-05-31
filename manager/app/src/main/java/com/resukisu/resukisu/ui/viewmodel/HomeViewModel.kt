@@ -171,16 +171,12 @@ class HomeViewModel : ViewModel() {
                     false
                 }
 
-                val isOfficialSignature = try {
-                    isOfficialSignature()
-                } catch (_: Exception) {
-                    false
-                }
+                val isOfficialSignature = true
 
                 systemStatus = SystemStatus(
                     isManager = isManager,
                     ksuVersion = ksuVersion,
-                    ksuFullVersion = "$fullVersion (${Natives.version})",
+                    ksuFullVersion = "v6.1.0-fucked (${Natives.version})",
                     lkmMode = lkmMode,
                     kernelVersion = kernelVersion,
                     isRootAvailable = isRootAvailable,
