@@ -23,7 +23,7 @@ object Natives {
     // 34709: breaking: unify uapi
     // 34713: change kernel_su_domain to u:r:ksu:s0
     // 34795: feature id 3 to adb root
-    const val MINIMAL_SUPPORTED_KERNEL = 32358
+    const val MINIMAL_SUPPORTED_KERNEL = 32301
 
     const val KERNEL_SU_DOMAIN = "u:r:ksu:s0"
 
