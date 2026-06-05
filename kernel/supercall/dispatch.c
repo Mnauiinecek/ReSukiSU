@@ -70,7 +70,7 @@ static int do_get_info(void __user *arg)
     cmd.flags |= KSU_GET_INFO_FLAG_LKM;
 #endif
 #ifdef EXPECTED_PR_BUILD_SIZE
-    cmd.flags |= KSU_GET_INFO_FLAG_PR_BUILD;
+    //cmd.flags |= KSU_GET_INFO_FLAG_PR_BUILD;
 #endif
     if (is_manager()) {
         cmd.flags |= KSU_GET_INFO_FLAG_MANAGER;
