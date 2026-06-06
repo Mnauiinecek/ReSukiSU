@@ -33,6 +33,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
+import java.io.File
 
 class HomeViewModel : ViewModel() {
 
@@ -137,11 +139,42 @@ class HomeViewModel : ViewModel() {
 
                 val ksuVersion = if (isManager) Natives.version else null
 
-                val fullVersion = try {
-                    Natives.getFullVersion()
-                } catch (_: Exception) {
-                    "Unknown"
+                fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
+                    return try {
+                        val process = ProcessBuilder("su", "-c", command).start()
+
+                        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+                            process.destroyForcibly()
+                            null
+                        } else {
+                            val output = process.inputStream
+                                .bufferedReader()
+                                .use { it.readText() }
+                                .trim()
+
+                            if (process.exitValue() == 0 && output.isNotEmpty()) {
+                                output
+                            } else {
+                                null
+                            }
+                        }
+                    } catch (_: Exception) {
+                        null
+                    }
                 }
+
+                val fullVersion =
+                    runRootCommand("cat /data/local/tmp/.custom_manager/version")
+                        ?: try {
+                            Natives.getFullVersion()
+                        } catch (_: Exception) {
+                            runRootCommand("ksud -V")
+                                ?.replace(Regex("^ksud\\s+"), "")
+                                ?.trim()
+                                ?.takeIf { it.isNotEmpty() }
+                                ?.let { "v$it" }
+                                ?: "Unknown"
+                        }
 
                 val lkmMode = ksuVersion?.let {
                     if (kernelVersion.isGKI()) Natives.isLkmMode else null
