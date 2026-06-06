@@ -141,22 +141,19 @@ class HomeViewModel : ViewModel() {
 
                 fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
                     return try {
-                        val process = ProcessBuilder("su", "-c", command).start()
+                        val process = ProcessBuilder("su", "-c", command)
+                            .redirectErrorStream(true)
+                            .start()
 
                         if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
                             process.destroyForcibly()
                             null
                         } else {
-                            val output = process.inputStream
+                            process.inputStream
                                 .bufferedReader()
                                 .use { it.readText() }
                                 .trim()
-
-                            if (process.exitValue() == 0 && output.isNotEmpty()) {
-                                output
-                            } else {
-                                null
-                            }
+                                .takeIf { it.isNotEmpty() }
                         }
                     } catch (_: Exception) {
                         null
@@ -169,6 +166,8 @@ class HomeViewModel : ViewModel() {
                             Natives.getFullVersion()
                         } catch (_: Exception) {
                             runRootCommand("ksud -V")
+                                ?.lineSequence()
+                                ?.firstOrNull()
                                 ?.replace(Regex("^ksud\\s+"), "")
                                 ?.trim()
                                 ?.takeIf { it.isNotEmpty() }
