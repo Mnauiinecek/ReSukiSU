@@ -149,11 +149,16 @@ class HomeViewModel : ViewModel() {
                             process.destroyForcibly()
                             null
                         } else {
-                            process.inputStream
+                            val output = process.inputStream
                                 .bufferedReader()
                                 .use { it.readText() }
                                 .trim()
-                                .takeIf { it.isNotEmpty() }
+
+                            if (process.exitValue() == 0 && output.isNotEmpty()) {
+                                output
+                            } else {
+                                null
+                            }
                         }
                     } catch (_: Exception) {
                         null
@@ -161,7 +166,7 @@ class HomeViewModel : ViewModel() {
                 }
 
                 val fullVersion =
-                    runRootCommand("cat /data/local/tmp/.custom_manager/version")
+                    runRootCommand("[ -f /data/local/tmp/.custom_manager/version ] && cat /data/local/tmp/.custom_manager/version")
                         ?: try {
                             Natives.getFullVersion()
                         } catch (_: Exception) {
