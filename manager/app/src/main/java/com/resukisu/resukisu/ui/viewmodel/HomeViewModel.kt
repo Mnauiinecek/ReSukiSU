@@ -209,7 +209,7 @@ class HomeViewModel : ViewModel() {
                 systemStatus = SystemStatus(
                     isManager = isManager,
                     ksuVersion = ksuVersion,
-                    ksuFullVersion = "v6.1.0-fucked (${Natives.version})",
+                    ksuFullVersion = "$fullVersion (${Natives.version})",
                     lkmMode = lkmMode,
                     kernelVersion = kernelVersion,
                     isRootAvailable = isRootAvailable,
