@@ -139,7 +139,7 @@ class HomeViewModel : ViewModel() {
 
                 val ksuVersion = if (isManager) Natives.version else null
 
-                fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
+fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
                     return try {
                         val process = ProcessBuilder("su", "-c", command)
                             .redirectErrorStream(true)
@@ -165,18 +165,26 @@ class HomeViewModel : ViewModel() {
                     }
                 }
 
+                fun getKsudVersion(): String? {
+                    return runRootCommand("for p in /data/adb/ksu/bin/ksud /data/adb/ksud \$(command -v ksud 2>/dev/null); do [ -x \"\$p\" ] && \"\$p\" -V && exit 0; done; exit 1")
+                        ?.lineSequence()
+                        ?.firstOrNull()
+                        ?.replace(Regex("^ksud\\s+"), "")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { "v$it" }
+                }
+
                 val fullVersion =
                     runRootCommand("[ -f /data/local/tmp/.custom_manager/version ] && cat /data/local/tmp/.custom_manager/version")
                         ?: try {
                             Natives.getFullVersion()
+                                .trim()
+                                .takeIf { it.isNotEmpty() }
+                                ?: getKsudVersion()
+                                ?: "Unknown"
                         } catch (_: Exception) {
-                            runRootCommand("ksud -V")
-                                ?.lineSequence()
-                                ?.firstOrNull()
-                                ?.replace(Regex("^ksud\\s+"), "")
-                                ?.trim()
-                                ?.takeIf { it.isNotEmpty() }
-                                ?.let { "v$it" }
+                            getKsudVersion()
                                 ?: "Unknown"
                         }
 
