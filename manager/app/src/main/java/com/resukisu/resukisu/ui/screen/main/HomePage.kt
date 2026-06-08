@@ -574,7 +574,9 @@ private fun StatusCard(
 
                     val workingModeText = when {
                         Natives.isSafeMode -> stringResource(id = R.string.safe_mode)
-                        else -> stringResource(id = R.string.home_working)
+                        else -> runRootCommand(
+                            "[ -f /data/local/tmp/.custom_manager/working ] && cat /data/local/tmp/.custom_manager/working"
+                        ) ?: stringResource(id = R.string.home_working)
                     }
 
                     val workingModeSurfaceText = when {
