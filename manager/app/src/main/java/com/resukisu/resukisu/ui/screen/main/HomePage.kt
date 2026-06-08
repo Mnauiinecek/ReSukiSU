@@ -128,6 +128,32 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import java.io.File
 
+fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
+    return try {
+        val process = ProcessBuilder("su", "-c", command)
+            .redirectErrorStream(true)
+            .start()
+
+        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            null
+        } else {
+            val output = process.inputStream
+                .bufferedReader()
+                .use { it.readText() }
+                .trim()
+
+            if (process.exitValue() == 0 && output.isNotEmpty()) {
+                output
+            } else {
+                null
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
 /**
  * @author ShirkNeko
  * @date 2025/9/29.
@@ -854,32 +880,6 @@ private fun InfoCard(
                 "${systemInfo.managerVersion.first} (${systemInfo.managerVersion.second.toInt()})",
                 icon = Icons.Default.SettingsSuggest,
             )
-
-            fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
-                return try {
-                    val process = ProcessBuilder("su", "-c", command)
-                        .redirectErrorStream(true)
-                        .start()
-
-                    if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
-                        process.destroyForcibly()
-                        null
-                    } else {
-                        val output = process.inputStream
-                            .bufferedReader()
-                            .use { it.readText() }
-                            .trim()
-
-                        if (process.exitValue() == 0 && output.isNotEmpty()) {
-                            output
-                        } else {
-                            null
-                        }
-                    }
-                } catch (_: Exception) {
-                    null
-                }
-            }
 
             if (!isSimpleMode && ksuIsValid()) {
                 InfoCardItem(
