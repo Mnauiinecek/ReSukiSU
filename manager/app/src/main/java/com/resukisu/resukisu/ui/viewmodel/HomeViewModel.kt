@@ -139,7 +139,7 @@ class HomeViewModel : ViewModel() {
 
                 val ksuVersion = if (isManager) Natives.version else null
 
-fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
+                fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
                     return try {
                         val process = ProcessBuilder("su", "-c", command)
                             .redirectErrorStream(true)
