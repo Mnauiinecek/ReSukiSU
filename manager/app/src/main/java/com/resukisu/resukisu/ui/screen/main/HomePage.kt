@@ -640,11 +640,7 @@ private fun StatusCard(
                             Spacer(Modifier.height(4.dp))
                             systemStatus.ksuFullVersion?.let {
                                 Text(
-                                    text = stringResource(
-                                        R.string.home_working_version,
-                                        runRootCommand("[ -f /data/local/tmp/.custom_manager/working ] && cat /data/local/tmp/.custom_manager/working")
-                                            ?: it
-                                    ),
+                                    text = stringResource(R.string.home_working_version, it),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.secondary,
                                 )
