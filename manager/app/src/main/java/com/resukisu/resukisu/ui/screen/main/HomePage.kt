@@ -34,7 +34,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Adb
 import androidx.compose.material.icons.filled.Android
-import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
@@ -83,6 +82,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -116,6 +116,7 @@ import com.resukisu.resukisu.ui.theme.blurEffect
 import com.resukisu.resukisu.ui.theme.blurSource
 import com.resukisu.resukisu.ui.theme.getCardColors
 import com.resukisu.resukisu.ui.theme.getCardElevation
+import com.resukisu.resukisu.ui.theme.renderBackgroundBlur
 import com.resukisu.resukisu.ui.util.LocalSnackbarHost
 import com.resukisu.resukisu.ui.util.downloader.checkNewVersion
 import com.resukisu.resukisu.ui.util.module.LatestVersionInfo
@@ -342,8 +343,6 @@ fun HomePage(
                         isHideSusfsStatus = viewModel.isHideSusfsStatus,
                         isHideZygiskImplement = viewModel.isHideZygiskImplement,
                         isHideMetaModuleImplement = viewModel.isHideMetaModuleImplement,
-                        showKpmInfo = viewModel.showKpmInfo,
-                        lkmMode = viewModel.systemStatus.lkmMode,
                     )
                 }
 
@@ -523,11 +522,17 @@ private fun StatusCard(
     onClickInstall: () -> Unit = {},
     onClickJailbreak: () -> Unit = {}
 ) {
+    val containerColor =
+        if (systemStatus.ksuVersion != null)
+            MaterialTheme.colorScheme.secondaryContainer
+        else
+            MaterialTheme.colorScheme.errorContainer
+
     ElevatedCard(
-        colors = getCardColors(
-            if (systemStatus.ksuVersion != null) MaterialTheme.colorScheme.secondaryContainer
-            else MaterialTheme.colorScheme.errorContainer
-        ),
+        modifier = Modifier
+            .clip(CardDefaults.elevatedShape)
+            .renderBackgroundBlur(containerColor),
+        colors = getCardColors(containerColor),
         elevation = getCardElevation(),
     ) {
         Row(
@@ -701,6 +706,9 @@ fun LearnMoreCard() {
     val url = stringResource(R.string.home_learn_kernelsu_url)
 
     ElevatedCard(
+        modifier = Modifier
+            .clip(CardDefaults.elevatedShape)
+            .renderBackgroundBlur(),
         colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerHighest),
         elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
     ) {
@@ -734,6 +742,9 @@ fun DonateCard() {
     val uriHandler = LocalUriHandler.current
 
     ElevatedCard(
+        modifier = Modifier
+            .clip(CardDefaults.elevatedShape)
+            .renderBackgroundBlur(),
         colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerHighest),
         elevation = getCardElevation(),
     ) {
@@ -768,11 +779,12 @@ private fun InfoCard(
     isSimpleMode: Boolean,
     isHideSusfsStatus: Boolean,
     isHideZygiskImplement: Boolean,
-    isHideMetaModuleImplement: Boolean,
-    showKpmInfo: Boolean,
-    lkmMode: Boolean?
+    isHideMetaModuleImplement: Boolean
 ) {
     ElevatedCard(
+        modifier = Modifier
+            .clip(CardDefaults.elevatedShape)
+            .renderBackgroundBlur(),
         colors = getCardColors(MaterialTheme.colorScheme.surfaceContainerHighest),
         elevation = getCardElevation(),
     ) {

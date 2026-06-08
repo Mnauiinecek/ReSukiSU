@@ -1,8 +1,8 @@
 package com.resukisu.resukisu.ui.theme
 
 import android.content.Context
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -10,7 +10,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -135,11 +134,11 @@ object CardConfig {
 object CardStyleProvider {
 
     @Composable
-    fun getCardColors(originalColor: Color) = CardDefaults.cardColors(
-        containerColor = originalColor.copy(alpha = CardConfig.cardAlpha),
-        contentColor = determineContentColor(originalColor),
-        disabledContainerColor = originalColor.copy(alpha = CardConfig.cardAlpha * 0.38f),
-        disabledContentColor = determineContentColor(originalColor).copy(alpha = 0.38f)
+    fun getCardColors(originalColor: Color, transparent: Boolean) = CardDefaults.cardColors(
+        containerColor = if (transparent) Color.Transparent else originalColor.copy(alpha = CardConfig.cardAlpha),
+        contentColor = contentColorFor(originalColor),
+        disabledContainerColor = if (transparent) Color.Transparent else originalColor.copy(alpha = CardConfig.cardAlpha * 0.38f),
+        disabledContentColor = contentColorFor(originalColor).copy(alpha = 0.38f)
     )
 
     @Composable
@@ -159,29 +158,12 @@ object CardStyleProvider {
         } else 0.dp,
         disabledElevation = 0.dp
     )
-
-    @Composable
-    private fun determineContentColor(originalColor: Color): Color {
-        val isDarkTheme = isSystemInDarkTheme()
-
-        return when {
-            ThemeConfig.isThemeChanging -> {
-                if (isDarkTheme) Color.White else Color.Black
-            }
-            CardConfig.isUserLightModeEnabled -> Color.Black
-            CardConfig.isUserDarkModeEnabled -> Color.White
-            else -> {
-                val luminance = originalColor.luminance()
-                val threshold = if (isDarkTheme) 0.4f else 0.6f
-                if (luminance > threshold) Color.Black else Color.White
-            }
-        }
-    }
 }
 
 // 向后兼容
 @Composable
-fun getCardColors(originalColor: Color) = CardStyleProvider.getCardColors(originalColor)
+fun getCardColors(originalColor: Color, renderBackground: Boolean = true) =
+    CardStyleProvider.getCardColors(originalColor, renderBackground && ThemeConfig.isEnableBlurExp)
 
 @Composable
 fun getCardElevation() = CardStyleProvider.getCardElevation()

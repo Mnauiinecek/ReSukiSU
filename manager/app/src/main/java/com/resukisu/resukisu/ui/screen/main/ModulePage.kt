@@ -148,7 +148,9 @@ import com.resukisu.resukisu.ui.navigation.Route
 import com.resukisu.resukisu.ui.screen.FlashIt
 import com.resukisu.resukisu.ui.screen.LabelText
 import com.resukisu.resukisu.ui.theme.CardConfig
+import com.resukisu.resukisu.ui.theme.ThemeConfig
 import com.resukisu.resukisu.ui.theme.blurSource
+import com.resukisu.resukisu.ui.theme.renderBackgroundBlur
 import com.resukisu.resukisu.ui.util.LocalPermissionRequestInterface
 import com.resukisu.resukisu.ui.util.LocalSnackbarHost
 import com.resukisu.resukisu.ui.util.downloader.download
@@ -466,7 +468,9 @@ fun ModulePage(bottomPadding: Dp) {
                 sheetState = bottomSheetState,
                 dragHandle = {
                     Surface(
-                        modifier = Modifier.padding(vertical = 11.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .padding(vertical = 11.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -1267,7 +1271,14 @@ fun ModuleItem(
     val hapticFeedback = LocalHapticFeedback.current
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(CardConfig.cardAlpha),
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .renderBackgroundBlur(),
+        color =
+            if (ThemeConfig.isEnableBlurExp)
+                Color.Transparent
+            else
+                MaterialTheme.colorScheme.surfaceContainerHighest.copy(CardConfig.cardAlpha),
         shape = RoundedCornerShape(16.dp)
     ) {
         val textDecoration = if (!module.remove) null else TextDecoration.LineThrough

@@ -97,6 +97,7 @@ import com.resukisu.resukisu.ui.theme.blurEffect
 import com.resukisu.resukisu.ui.theme.blurSource
 import com.resukisu.resukisu.ui.theme.getCardColors
 import com.resukisu.resukisu.ui.theme.getCardElevation
+import com.resukisu.resukisu.ui.theme.renderBackgroundBlur
 import com.resukisu.resukisu.ui.util.LkmSelection
 import com.resukisu.resukisu.ui.util.getAvailablePartitions
 import com.resukisu.resukisu.ui.util.getCurrentKmi
@@ -325,7 +326,8 @@ fun InstallScreen(
                         elevation = getCardElevation(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 12.dp),
+                            .padding(bottom = 12.dp)
+                            .renderBackgroundBlur(MaterialTheme.colorScheme.surfaceVariant),
                     ) {
                         val isOta = installMethod is InstallMethod.DirectInstallToInactiveSlot
                         val suffix = produceState(initialValue = "", isOta) {
@@ -376,7 +378,8 @@ fun InstallScreen(
                         elevation = getCardElevation(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 12.dp),
+                            .padding(bottom = 12.dp)
+                            .renderBackgroundBlur(MaterialTheme.colorScheme.surfaceVariant),
                     ) {
                         SettingsBaseWidget(
                             title = stringResource(id = R.string.install_upload_lkm_file),
@@ -402,6 +405,7 @@ fun InstallScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 12.dp)
+                                .renderBackgroundBlur(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Text(
                                 text = stringResource(
@@ -604,6 +608,7 @@ private fun SelectInstallMethod(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
+                    .renderBackgroundBlur(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 MaterialTheme(
                     colorScheme = MaterialTheme.colorScheme.copy(
@@ -710,6 +715,7 @@ private fun SelectInstallMethod(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 12.dp)
+                    .renderBackgroundBlur(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 MaterialTheme(
                     colorScheme = MaterialTheme.colorScheme.copy(

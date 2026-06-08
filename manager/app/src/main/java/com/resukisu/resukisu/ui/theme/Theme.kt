@@ -3,12 +3,19 @@ package com.resukisu.resukisu.ui.theme
 import android.R
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
+import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -34,19 +41,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.zIndex
 import androidx.core.content.edit
+import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.graphics.scale
 import androidx.core.net.toUri
@@ -59,6 +80,7 @@ import com.kyant.m3color.scheme.SchemeTonalSpot
 import com.kyant.m3color.score.Score
 import com.resukisu.resukisu.ui.theme.util.BackgroundTransformation
 import com.resukisu.resukisu.ui.theme.util.saveTransformedBackground
+import com.resukisu.resukisu.ui.util.LocalBackgroundBlurAnchor
 import com.resukisu.resukisu.ui.util.LocalBlurState
 import com.resukisu.resukisu.ui.webui.MonetColorsProvider
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -72,6 +94,9 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 
 @Stable
 object ThemeConfig {
@@ -410,9 +435,25 @@ private fun BackgroundLayer() {
         backgroundUri.value = ThemeConfig.customBackgroundUri
         if (backgroundUri.value == null) {
             backgroundImagePainter = null
+            blurBackgroundImageBitmap = null
             backgroundSeedColor = 0
             prefs.edit(commit = true) {
                 remove("cached_seed_color")
+            }
+        }
+    }
+
+    val hasBlurBitmap = blurBackgroundImageBitmap != null
+
+    LaunchedEffect(ThemeConfig.isEnableBlurExp, hasBlurBitmap) {
+        if (!ThemeConfig.isEnableBlurExp || !hasBlurBitmap) return@LaunchedEffect
+
+        while (true) {
+            withFrameNanos { }
+            backgroundBlurFrameTick = if (backgroundBlurFrameTick == Int.MAX_VALUE) {
+                0
+            } else {
+                backgroundBlurFrameTick + 1
             }
         }
     }
@@ -422,6 +463,16 @@ private fun BackgroundLayer() {
         modifier = Modifier
             .fillMaxSize()
             .zIndex(-2f)
+            .onSizeChanged { size ->
+                if (
+                    size.width > 0 &&
+                    size.height > 0 &&
+                    backgroundBlurViewportSize != size
+                ) {
+                    backgroundBlurViewportSize = size
+                    blurBackgroundImageBitmap = null
+                }
+            }
             .background(
                 MaterialTheme.colorScheme.surfaceContainer
             )
@@ -434,6 +485,9 @@ private fun BackgroundLayer() {
 }
 
 var backgroundImagePainter: AsyncImagePainter? by mutableStateOf(null)
+var blurBackgroundImageBitmap: ImageBitmap? by mutableStateOf(null)
+private var backgroundBlurViewportSize by mutableStateOf(IntSize(0, 0))
+private var backgroundBlurFrameTick by mutableIntStateOf(0)
 var backgroundSeedColor by mutableIntStateOf(0)
 
 /**
@@ -477,6 +531,272 @@ fun Modifier.blurEffect(): Modifier {
     } ?: this
 }
 
+
+fun Modifier.renderBackgroundBlur(
+    tintColor: Color? = null
+): Modifier = composed {
+    if (!ThemeConfig.isEnableBlurExp) return@composed this
+
+    var coordinates by remember {
+        mutableStateOf<LayoutCoordinates?>(null)
+    }
+
+    val tintColor = (tintColor ?: MaterialTheme.colorScheme.surfaceContainerHighest).copy(
+        alpha = CardConfig.cardAlpha
+    )
+    val backgroundBlurAnchor = LocalBackgroundBlurAnchor.current
+
+    this
+        .onGloballyPositioned { newCoordinates ->
+            coordinates = newCoordinates.takeIf { it.isAttached }
+        }
+        .drawWithContent {
+            backgroundBlurFrameTick
+
+            val currentBitmap = blurBackgroundImageBitmap
+            val currentBoundsInBackground = coordinates?.boundsInBackgroundNow(backgroundBlurAnchor)
+
+            if (
+                currentBitmap != null &&
+                currentBoundsInBackground != null &&
+                currentBoundsInBackground.width > 0f &&
+                currentBoundsInBackground.height > 0f
+            ) {
+                drawBitmapIntersection(
+                    bitmap = currentBitmap,
+                    boundsInBackground = currentBoundsInBackground,
+                )
+
+                drawRect(
+                    color = tintColor,
+                    blendMode = BlendMode.SrcOver,
+                )
+            }
+
+            drawContent()
+        }
+}
+
+private fun LayoutCoordinates.boundsInBackgroundNow(
+    backgroundCoordinates: LayoutCoordinates?,
+): Rect? {
+    if (!isAttached || size.width <= 0 || size.height <= 0) return null
+
+    return backgroundCoordinates
+        ?.takeIf { it.isAttached && it.size.width > 0 && it.size.height > 0 }
+        ?.let { boundsInCoordinatesNow(it) }
+        ?: localBoundsInWindowNow()
+}
+
+private fun LayoutCoordinates.boundsInCoordinatesNow(
+    targetCoordinates: LayoutCoordinates,
+): Rect? {
+    fun localToTarget(point: Offset): Offset {
+        val screenPoint = localToScreen(point)
+        if (!screenPoint.isUsable()) return Offset.Unspecified
+
+        return targetCoordinates.screenToLocal(screenPoint)
+    }
+
+    val width = size.width.toFloat()
+    val height = size.height.toFloat()
+
+    return boundsFromCorners(
+        topLeft = localToTarget(Offset.Zero),
+        topRight = localToTarget(Offset(width, 0f)),
+        bottomLeft = localToTarget(Offset(0f, height)),
+        bottomRight = localToTarget(Offset(width, height)),
+    )
+}
+
+private fun LayoutCoordinates.localBoundsInWindowNow(): Rect? {
+    val width = size.width.toFloat()
+    val height = size.height.toFloat()
+
+    return boundsFromCorners(
+        topLeft = localToWindow(Offset.Zero),
+        topRight = localToWindow(Offset(width, 0f)),
+        bottomLeft = localToWindow(Offset(0f, height)),
+        bottomRight = localToWindow(Offset(width, height)),
+    )
+}
+
+private fun boundsFromCorners(
+    topLeft: Offset,
+    topRight: Offset,
+    bottomLeft: Offset,
+    bottomRight: Offset,
+): Rect? {
+    if (
+        !topLeft.isUsable() ||
+        !topRight.isUsable() ||
+        !bottomLeft.isUsable() ||
+        !bottomRight.isUsable()
+    ) {
+        return null
+    }
+
+    return Rect(
+        left = minOf(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x),
+        top = minOf(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y),
+        right = maxOf(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x),
+        bottom = maxOf(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y),
+    )
+}
+
+private data class BitmapDrawSegment(
+    val srcStart: Int,
+    val srcEnd: Int,
+    val dstStart: Int,
+    val dstEnd: Int,
+)
+
+private fun buildBitmapDrawSegments(
+    sourceStart: Float,
+    sourceEnd: Float,
+    bitmapSize: Int,
+    destinationSize: Float,
+): List<BitmapDrawSegment> {
+    val sourceSpan = sourceEnd - sourceStart
+    val destinationEnd = ceil(destinationSize).toInt()
+
+    if (bitmapSize <= 0 || sourceSpan <= 0f || destinationEnd <= 0) {
+        return emptyList()
+    }
+
+    fun mapToDestination(value: Float): Float {
+        return (value - sourceStart) / sourceSpan * destinationSize
+    }
+
+    val segments = mutableListOf<BitmapDrawSegment>()
+
+    // Emulate Shader.TileMode.CLAMP for areas that are above / left of the bitmap.
+    if (sourceStart < 0f) {
+        val dstEnd = ceil(mapToDestination(0f).coerceIn(0f, destinationSize))
+            .toInt()
+            .coerceIn(0, destinationEnd)
+
+        if (dstEnd > 0) {
+            segments += BitmapDrawSegment(
+                srcStart = 0,
+                srcEnd = 1,
+                dstStart = 0,
+                dstEnd = dstEnd,
+            )
+        }
+    }
+
+    val clippedStart = sourceStart.coerceIn(0f, bitmapSize.toFloat())
+    val clippedEnd = sourceEnd.coerceIn(0f, bitmapSize.toFloat())
+
+    if (clippedEnd > clippedStart) {
+        val srcStart = floor(clippedStart).toInt().coerceIn(0, bitmapSize - 1)
+        val srcEnd = ceil(clippedEnd).toInt().coerceIn(srcStart + 1, bitmapSize)
+        val dstStart = floor(mapToDestination(clippedStart).coerceIn(0f, destinationSize))
+            .toInt()
+            .coerceIn(0, destinationEnd)
+        val dstEnd = ceil(mapToDestination(clippedEnd).coerceIn(0f, destinationSize))
+            .toInt()
+            .coerceIn(0, destinationEnd)
+
+        if (dstEnd > dstStart) {
+            segments += BitmapDrawSegment(
+                srcStart = srcStart,
+                srcEnd = srcEnd,
+                dstStart = dstStart,
+                dstEnd = dstEnd,
+            )
+        }
+    }
+
+    // Emulate Shader.TileMode.CLAMP for areas that are below / right of the bitmap.
+    if (sourceEnd > bitmapSize.toFloat()) {
+        val dstStart = floor(mapToDestination(bitmapSize.toFloat()).coerceIn(0f, destinationSize))
+            .toInt()
+            .coerceIn(0, destinationEnd)
+
+        if (destinationEnd > dstStart) {
+            segments += BitmapDrawSegment(
+                srcStart = bitmapSize - 1,
+                srcEnd = bitmapSize,
+                dstStart = dstStart,
+                dstEnd = destinationEnd,
+            )
+        }
+    }
+
+    // The whole destination is outside one side of the source bitmap.
+    if (segments.isEmpty()) {
+        val src = if (sourceEnd <= 0f) 0 else bitmapSize - 1
+        segments += BitmapDrawSegment(
+            srcStart = src,
+            srcEnd = src + 1,
+            dstStart = 0,
+            dstEnd = destinationEnd,
+        )
+    }
+
+    return segments
+}
+
+private fun ContentDrawScope.drawBitmapIntersection(
+    bitmap: ImageBitmap,
+    boundsInBackground: Rect,
+) {
+    val bitmapWidth = bitmap.width
+    val bitmapHeight = bitmap.height
+
+    if (
+        bitmapWidth <= 0 ||
+        bitmapHeight <= 0 ||
+        size.width <= 0f ||
+        size.height <= 0f ||
+        boundsInBackground.width <= 0f ||
+        boundsInBackground.height <= 0f
+    ) {
+        return
+    }
+
+    val xSegments = buildBitmapDrawSegments(
+        sourceStart = boundsInBackground.left,
+        sourceEnd = boundsInBackground.right,
+        bitmapSize = bitmapWidth,
+        destinationSize = size.width,
+    )
+    val ySegments = buildBitmapDrawSegments(
+        sourceStart = boundsInBackground.top,
+        sourceEnd = boundsInBackground.bottom,
+        bitmapSize = bitmapHeight,
+        destinationSize = size.height,
+    )
+
+    for (xSegment in xSegments) {
+        for (ySegment in ySegments) {
+            val srcWidth = xSegment.srcEnd - xSegment.srcStart
+            val srcHeight = ySegment.srcEnd - ySegment.srcStart
+            val dstWidth = xSegment.dstEnd - xSegment.dstStart
+            val dstHeight = ySegment.dstEnd - ySegment.dstStart
+
+            if (srcWidth <= 0 || srcHeight <= 0 || dstWidth <= 0 || dstHeight <= 0) {
+                continue
+            }
+
+            drawImage(
+                image = bitmap,
+                srcOffset = IntOffset(xSegment.srcStart, ySegment.srcStart),
+                srcSize = IntSize(srcWidth, srcHeight),
+                dstOffset = IntOffset(xSegment.dstStart, ySegment.dstStart),
+                dstSize = IntSize(dstWidth, dstHeight),
+                blendMode = BlendMode.SrcOver,
+            )
+        }
+    }
+}
+
+private fun Offset.isUsable(): Boolean {
+    return x.isFinite() && y.isFinite()
+}
+
 private suspend fun Bitmap.extractSeedColor(
     maxColors: Int = 128,
     fallbackColorArgb: Int = -12417548
@@ -498,6 +818,262 @@ private suspend fun Bitmap.extractSeedColor(
     sortedColors.firstOrNull() ?: fallbackColorArgb
 }
 
+private fun Bitmap.softwareFastBlur(radius: Int): Bitmap {
+    if (radius < 1) return this
+
+    val w = width
+    val h = height
+    val pix = IntArray(w * h)
+    getPixels(pix, 0, w, 0, 0, w, h)
+
+    val wm = w - 1
+    val hm = h - 1
+    val wh = w * h
+    val div = radius + radius + 1
+
+    val r = IntArray(wh)
+    val g = IntArray(wh)
+    val b = IntArray(wh)
+    var rsum: Int; var gsum: Int; var bsum: Int
+    var p: Int; var yp: Int; var yi: Int
+    val vmin = IntArray(w.coerceAtLeast(h))
+
+    var divsum = (div + 1) shr 1
+    divsum *= divsum
+    val dv = IntArray(256 * divsum)
+    for (i in 0 until 256 * divsum) {
+        dv[i] = i / divsum
+    }
+
+    var yw = 0
+    yi = 0
+
+    val stack = Array(div) { IntArray(3) }
+    var stackpointer: Int
+    var stackstart: Int
+    var sir: IntArray
+    var rbs: Int
+    val r1 = radius + 1
+    var routsum: Int; var goutsum: Int; var boutsum: Int
+    var rinsum: Int; var ginsum: Int; var binsum: Int
+
+    for (y in 0 until h) {
+        bsum = 0; gsum = 0; rsum = 0
+        boutsum = 0; goutsum = 0; routsum = 0
+        binsum = 0; ginsum = 0; rinsum = 0
+        for (i in -radius..radius) {
+            p = pix[yi + wm.coerceAtMost(i.coerceAtLeast(0))]
+            sir = stack[i + radius]
+            sir[0] = (p and 0xff0000) shr 16
+            sir[1] = (p and 0x00ff00) shr 8
+            sir[2] = p and 0x0000ff
+            rbs = r1 - abs(i)
+            rsum += sir[0] * rbs
+            gsum += sir[1] * rbs
+            bsum += sir[2] * rbs
+            if (i > 0) {
+                rinsum += sir[0]
+                ginsum += sir[1]
+                binsum += sir[2]
+            } else {
+                routsum += sir[0]
+                goutsum += sir[1]
+                boutsum += sir[2]
+            }
+        }
+        stackpointer = radius
+
+        for (x in 0 until w) {
+            r[yi] = dv[rsum]
+            g[yi] = dv[gsum]
+            b[yi] = dv[bsum]
+
+            rsum -= routsum
+            gsum -= goutsum
+            bsum -= boutsum
+
+            stackstart = stackpointer - radius + div
+            sir = stack[stackstart % div]
+
+            routsum -= sir[0]
+            goutsum -= sir[1]
+            boutsum -= sir[2]
+
+            if (y == 0) vmin[x] = (x + radius + 1).coerceAtMost(wm)
+            p = pix[yw + vmin[x]]
+
+            sir[0] = (p and 0xff0000) shr 16
+            sir[1] = (p and 0x00ff00) shr 8
+            sir[2] = p and 0x0000ff
+
+            rinsum += sir[0]
+            ginsum += sir[1]
+            binsum += sir[2]
+
+            rsum += rinsum
+            gsum += ginsum
+            bsum += binsum
+
+            stackpointer = (stackpointer + 1) % div
+            sir = stack[stackpointer % div]
+
+            routsum += sir[0]
+            goutsum += sir[1]
+            boutsum += sir[2]
+
+            rinsum -= sir[0]
+            ginsum -= sir[1]
+            binsum -= sir[2]
+
+            yi++
+        }
+        yw += w
+    }
+
+    for (x in 0 until w) {
+        bsum = 0; gsum = 0; rsum = 0
+        boutsum = 0; goutsum = 0; routsum = 0
+        binsum = 0; ginsum = 0; rinsum = 0
+        yp = -radius * w
+        for (i in -radius..radius) {
+            yi = (yp.coerceAtLeast(0)) + x
+            sir = stack[i + radius]
+            sir[0] = r[yi]
+            sir[1] = g[yi]
+            sir[2] = b[yi]
+            rbs = r1 - abs(i)
+            rsum += r[yi] * rbs
+            gsum += g[yi] * rbs
+            bsum += b[yi] * rbs
+            if (i > 0) {
+                rinsum += sir[0]
+                ginsum += sir[1]
+                binsum += sir[2]
+            } else {
+                routsum += sir[0]
+                goutsum += sir[1]
+                boutsum += sir[2]
+            }
+            if (i < hm) yp += w
+        }
+        yi = x
+        stackpointer = radius
+        for (y in 0 until h) {
+            pix[yi] = (-0x1000000 and pix[yi]) or (dv[rsum] shl 16) or (dv[gsum] shl 8) or dv[bsum]
+            rsum -= routsum
+            gsum -= goutsum
+            bsum -= boutsum
+            stackstart = stackpointer - radius + div
+            sir = stack[stackstart % div]
+            routsum -= sir[0]
+            goutsum -= sir[1]
+            boutsum -= sir[2]
+            if (x == 0) vmin[y] = (y + r1).coerceAtMost(hm) * w
+            p = x + vmin[y]
+            sir[0] = r[p]
+            sir[1] = g[p]
+            sir[2] = b[p]
+            rinsum += sir[0]
+            ginsum += sir[1]
+            binsum += sir[2]
+            rsum += rinsum
+            gsum += ginsum
+            bsum += binsum
+            stackpointer = (stackpointer + 1) % div
+            sir = stack[stackpointer]
+            routsum += sir[0]
+            goutsum += sir[1]
+            boutsum += sir[2]
+            rinsum -= sir[0]
+            ginsum -= sir[1]
+            binsum -= sir[2]
+            yi += w
+        }
+    }
+
+    val outputBitmap = createBitmap(w, h)
+    outputBitmap.setPixels(pix, 0, w, 0, 0, w, h)
+    return outputBitmap
+}
+
+@RequiresApi(Build.VERSION_CODES.S)
+private fun Bitmap.blurImage(blurRadius: Float): ImageBitmap {
+    val outputBitmap = createBitmap(width, height)
+    val outputCanvas = Canvas(outputBitmap)
+
+    if (outputCanvas.isHardwareAccelerated) {
+        val renderNode = RenderNode("BlurEffectNode").apply {
+            setPosition(0, 0, width, height)
+            setRenderEffect(
+                RenderEffect.createBlurEffect(
+                    blurRadius,
+                    blurRadius,
+                    Shader.TileMode.CLAMP
+                )
+            )
+        }
+
+        val recordingCanvas = renderNode.beginRecording()
+        recordingCanvas.drawBitmap(this, 0f, 0f, null)
+        renderNode.endRecording()
+
+        outputCanvas.drawRenderNode(renderNode)
+    } else {
+        val radiusInt = blurRadius.toInt().coerceIn(1, 25)
+        return this.softwareFastBlur(radiusInt).asImageBitmap()
+    }
+
+    return outputBitmap.asImageBitmap()
+}
+
+
+@RequiresApi(Build.VERSION_CODES.S)
+private fun Bitmap.createBackgroundBlurImage(
+    viewportSize: IntSize,
+    blurRadius: Float,
+): ImageBitmap {
+    val blurSource = createBackgroundBlurSource(viewportSize)
+
+    return try {
+        blurSource.blurImage(blurRadius)
+    } finally {
+        if (blurSource !== this) {
+            blurSource.recycle()
+        }
+    }
+}
+
+private fun Bitmap.createBackgroundBlurSource(viewportSize: IntSize): Bitmap {
+    val targetWidth = viewportSize.width
+    val targetHeight = viewportSize.height
+
+    if (
+        targetWidth <= 0 ||
+        targetHeight <= 0 ||
+        (width == targetWidth && height == targetHeight)
+    ) {
+        return this
+    }
+
+    val scale = maxOf(
+        targetWidth / width.toFloat(),
+        targetHeight / height.toFloat(),
+    )
+    val scaledWidth = width * scale
+    val scaledHeight = height * scale
+    val left = (targetWidth - scaledWidth) / 2f
+    val top = (targetHeight - scaledHeight) / 2f
+
+    return createBitmap(targetWidth, targetHeight).also { outputBitmap ->
+        Canvas(outputBitmap).drawBitmap(
+            this,
+            null,
+            RectF(left, top, left + scaledWidth, top + scaledHeight),
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG),
+        )
+    }
+}
+
 @Composable
 private fun BackgroundInitializer(uri: Uri) {
     val coroutineScope = rememberCoroutineScope()
@@ -514,6 +1090,22 @@ private fun BackgroundInitializer(uri: Uri) {
         prefs
             .getInt("cached_seed_color", dynamicColorFromSystem)
 
+    LaunchedEffect(ThemeConfig.isEnableBlurExp, backgroundBlurViewportSize) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ThemeConfig.isEnableBlurExp) {
+            backgroundImagePainter?.let {
+                if (it.state !is AsyncImagePainter.State.Success) return@let
+
+                val bitmap = (it.state as AsyncImagePainter.State.Success).result.drawable.toBitmap()
+                blurBackgroundImageBitmap = bitmap.createBackgroundBlurImage(
+                    viewportSize = backgroundBlurViewportSize,
+                    blurRadius = 25f,
+                )
+            }
+        } else {
+            blurBackgroundImageBitmap = null
+        }
+    }
+
     backgroundImagePainter = rememberAsyncImagePainter(
         model = ImageRequest.Builder(LocalContext.current)
             .data(uri)
@@ -528,9 +1120,20 @@ private fun BackgroundInitializer(uri: Uri) {
             Log.d("ThemeSystem", "背景加载成功")
             ThemeConfig.backgroundImageLoaded = true
             ThemeConfig.isThemeChanging = false
+
+            val bitmap = it.result.drawable.toBitmap()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && ThemeConfig.isEnableBlurExp) {
+                blurBackgroundImageBitmap = bitmap.createBackgroundBlurImage(
+                    viewportSize = backgroundBlurViewportSize,
+                    blurRadius = 25f,
+                )
+            } else {
+                blurBackgroundImageBitmap = null
+            }
+
             backgroundSeedColor = calcedCachedSeedColor
             coroutineScope.launch {
-                backgroundSeedColor = it.result.drawable.toBitmap().extractSeedColor(
+                backgroundSeedColor = bitmap.extractSeedColor(
                     fallbackColorArgb = calcedCachedSeedColor
                 )
 

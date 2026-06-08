@@ -105,6 +105,7 @@ import com.resukisu.resukisu.ui.theme.ThemeColors
 import com.resukisu.resukisu.ui.theme.ThemeConfig
 import com.resukisu.resukisu.ui.theme.blurEffect
 import com.resukisu.resukisu.ui.theme.blurSource
+import com.resukisu.resukisu.ui.theme.renderBackgroundBlur
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -552,7 +553,10 @@ private fun AppearanceSettings(
             topPadding = 1.dp,
         ) { shape ->
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(
+                modifier = Modifier
+                    .clip(shape)
+                    .renderBackgroundBlur(),
+                color = if (ThemeConfig.isEnableBlurExp) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerHighest.copy(
                     alpha = CardConfig.cardAlpha
                 ),
                 shape = shape

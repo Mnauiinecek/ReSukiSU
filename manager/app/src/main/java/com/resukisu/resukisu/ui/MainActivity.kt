@@ -45,6 +45,8 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -104,6 +106,7 @@ import com.resukisu.resukisu.ui.theme.KernelSUTheme
 import com.resukisu.resukisu.ui.theme.ThemeConfig
 import com.resukisu.resukisu.ui.theme.backgroundImagePainter
 import com.resukisu.resukisu.ui.theme.blurSource
+import com.resukisu.resukisu.ui.util.LocalBackgroundBlurAnchor
 import com.resukisu.resukisu.ui.util.LocalBlurState
 import com.resukisu.resukisu.ui.util.LocalHandlePageChange
 import com.resukisu.resukisu.ui.util.LocalPagerState
@@ -492,6 +495,16 @@ class MainActivity : ComponentActivity() {
                                         }
                                     ) { content ->
                                         val snackBarHostState = remember { SnackbarHostState() }
+                                        var backgroundBlurAnchorCoordinates by remember {
+                                            mutableStateOf<LayoutCoordinates?>(null)
+                                        }
+
+                                        LaunchedEffect(backgroundImagePainter) {
+                                            if (backgroundImagePainter == null) {
+                                                backgroundBlurAnchorCoordinates = null
+                                            }
+                                        }
+
                                         with(predictiveBackAnimationHandler) {
                                             Box(
                                                 modifier = Modifier
@@ -514,12 +527,19 @@ class MainActivity : ComponentActivity() {
                                                         ThemeConfig.isEnableBlur
                                                     ),
                                                     LocalSnackbarHost provides snackBarHostState,
+                                                    LocalBackgroundBlurAnchor provides backgroundBlurAnchorCoordinates,
                                                 ) {
                                                     backgroundImagePainter?.let {
                                                         Box(
                                                             modifier = Modifier
                                                                 .fillMaxSize()
                                                                 .zIndex(-1f)
+                                                                .onGloballyPositioned { newCoordinates ->
+                                                                    backgroundBlurAnchorCoordinates =
+                                                                        newCoordinates.takeIf { coordinates ->
+                                                                            coordinates.isAttached
+                                                                        }
+                                                                }
                                                                 .paint(
                                                                     painter = it,
                                                                     contentScale = ContentScale.Crop,

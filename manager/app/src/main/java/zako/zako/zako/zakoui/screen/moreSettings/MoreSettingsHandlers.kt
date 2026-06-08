@@ -182,7 +182,8 @@ class MoreSettingsHandlers(
         state.isCustomBackgroundEnabled = true
         CardConfig.cardAlpha = 0.55f
         BackgroundManager.saveBackgroundDim(activity, 0.3f)
-        BackgroundManager.saveEnableBlur(activity, false)
+        BackgroundManager.saveEnableBlur(activity, true)
+        BackgroundManager.saveEnableBlurExp(activity, false)
         BackgroundManager.saveUseBackgroundSeedColor(activity, true)
         BackgroundManager.saveEnableHighContrastMode(activity, false)
         CardConfig.cardElevation = 0.dp
@@ -216,6 +217,7 @@ class MoreSettingsHandlers(
 
         BackgroundManager.saveBackgroundDim(activity, 0f)
         BackgroundManager.saveEnableBlur(activity, false)
+        BackgroundManager.saveEnableBlurExp(activity, false)
         BackgroundManager.saveUseBackgroundSeedColor(activity, false)
         BackgroundManager.saveEnableHighContrastMode(activity, false)
 

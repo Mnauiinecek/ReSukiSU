@@ -107,7 +107,9 @@ import com.resukisu.resukisu.ui.navigation.Route
 import com.resukisu.resukisu.ui.screen.FlashIt
 import com.resukisu.resukisu.ui.screen.LabelText
 import com.resukisu.resukisu.ui.theme.CardConfig
+import com.resukisu.resukisu.ui.theme.ThemeConfig
 import com.resukisu.resukisu.ui.theme.blurSource
+import com.resukisu.resukisu.ui.theme.renderBackgroundBlur
 import com.resukisu.resukisu.ui.util.LocalPermissionRequestInterface
 import com.resukisu.resukisu.ui.util.LocalSnackbarHost
 import com.resukisu.resukisu.ui.util.downloader.download
@@ -418,12 +420,17 @@ fun OnlineModuleItem(
     val navigator = LocalNavigator.current
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(CardConfig.cardAlpha),
-        shape = RoundedCornerShape(16.dp),
+        color =
+            if (ThemeConfig.isEnableBlurExp)
+                Color.Transparent
+            else
+                MaterialTheme.colorScheme.surfaceContainerHighest.copy(CardConfig.cardAlpha),
         modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
             .clickable {
                 navigator.push(Route.ModuleRepoDetail(module))
-            },
+            }
+            .renderBackgroundBlur(),
     ) {
         Column(
             modifier = Modifier.padding(22.dp, 18.dp, 22.dp, 12.dp)
