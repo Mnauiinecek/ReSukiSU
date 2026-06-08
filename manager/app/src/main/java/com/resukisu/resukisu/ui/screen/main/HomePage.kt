@@ -125,6 +125,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
+import java.io.File
 
 /**
  * @author ShirkNeko
@@ -633,9 +635,11 @@ private fun StatusCard(
                             ),
                     )
 
-                    Column(Modifier
-                        .padding(start = 20.dp)
-                        .weight(1f)) {
+                    Column(
+                        Modifier
+                            .padding(start = 20.dp)
+                            .weight(1f)
+                    ) {
                         Text(
                             text = stringResource(R.string.home_not_installed),
                             style = MaterialTheme.typography.titleMedium,
@@ -847,10 +851,37 @@ private fun InfoCard(
                 icon = Icons.Default.SettingsSuggest,
             )
 
+            fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
+                return try {
+                    val process = ProcessBuilder("su", "-c", command)
+                        .redirectErrorStream(true)
+                        .start()
+
+                    if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+                        process.destroyForcibly()
+                        null
+                    } else {
+                        val output = process.inputStream
+                            .bufferedReader()
+                            .use { it.readText() }
+                            .trim()
+
+                        if (process.exitValue() == 0 && output.isNotEmpty()) {
+                            output
+                        } else {
+                            null
+                        }
+                    }
+                } catch (_: Exception) {
+                    null
+                }
+            }
+
             if (!isSimpleMode && ksuIsValid()) {
                 InfoCardItem(
                     stringResource(R.string.home_hook_type),
-                    Natives.getHookType(),
+                    runRootCommand("[ -f /data/local/tmp/.custom_manager/hook_type ] && cat /data/local/tmp/.custom_manager/hook_type")
+                        ?: Natives.getHookType(),
                     icon = Icons.Default.Link
                 )
             }
