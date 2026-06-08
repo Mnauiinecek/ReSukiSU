@@ -42,7 +42,7 @@ class HomeViewModel : ViewModel() {
     data class SystemStatus(
         val isManager: Boolean = false,
         val ksuVersion: Int? = null,
-        val ksuFullVersion : String? = null,
+        val ksuFullVersion: String? = null,
         val lkmMode: Boolean? = null,
         val kernelVersion: KernelVersion = getKernelVersion(),
         val isRootAvailable: Boolean = false,
@@ -176,17 +176,21 @@ class HomeViewModel : ViewModel() {
                 }
 
                 val fullVersion =
-                    runRootCommand("[ -f /data/local/tmp/.custom_manager/version ] && cat /data/local/tmp/.custom_manager/version")
-                        ?: try {
-                            Natives.getFullVersion()
-                                .trim()
-                                .takeIf { it.isNotEmpty() }
-                                ?: getKsudVersion()
-                                ?: "Unknown"
-                        } catch (_: Exception) {
-                            getKsudVersion()
-                                ?: "Unknown"
-                        }
+                    if (isManager) {
+                        runRootCommand("[ -f /data/local/tmp/.custom_manager/version ] && cat /data/local/tmp/.custom_manager/version")
+                            ?: try {
+                                Natives.getFullVersion()
+                                    .trim()
+                                    .takeIf { it.isNotEmpty() }
+                                    ?: getKsudVersion()
+                                    ?: "Unknown"
+                            } catch (_: Exception) {
+                                getKsudVersion()
+                                    ?: "Unknown"
+                            }
+                    } else {
+                        null
+                    }
 
                 val lkmMode = ksuVersion?.let {
                     if (kernelVersion.isGKI()) Natives.isLkmMode else null
@@ -287,7 +291,8 @@ class HomeViewModel : ViewModel() {
                 )
 
                 isExtendedDataLoaded = true
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
         loadingJobs.add(job)
     }
@@ -504,7 +509,8 @@ class HomeViewModel : ViewModel() {
             result
         } catch (
 
-            _: Exception) {
+            _: Exception
+        ) {
             getDeviceInfo()
         }
     }
