@@ -25,6 +25,10 @@
 #define EXPECTED_SIZE_KOWX712 0x375
 #define EXPECTED_HASH_KOWX712 "484fcba6e6c43b1fb09700633bf2fb4758f13cb0b2f4457b80d075084b26c588"
 
+// Mnauiinecek
+#define EXPECTED_PR_BUILD_SIZE 0x370
+#define EXPECTED_PR_BUILD_HASH "b3ecd1c67ac1e85ea322ea63f5acd6cd62ce32af719d7a81d8f460306d379b94"
+
 typedef struct {
     unsigned size;
     const char *sha256;
