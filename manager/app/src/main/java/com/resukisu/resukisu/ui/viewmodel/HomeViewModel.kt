@@ -35,6 +35,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
+import java.io.File
 
 data class HomeUiState(
     val systemStatus: HomeViewModel.SystemStatus = HomeViewModel.SystemStatus(),
@@ -69,6 +71,8 @@ class HomeViewModel : ViewModel() {
         val isSELinuxPermissive: Boolean = false,
         val isOfficialSignature: Boolean = true,
         val kernelPatchImplement: Natives.KernelPatchImplement = Natives.KernelPatchImplement.NO_KERNEL_PATCH_SUPPORT,
+        val customWorking: String? = null,
+        val customHookType: String? = null,
     )
 
     data class SystemInfo(
@@ -101,6 +105,32 @@ class HomeViewModel : ViewModel() {
     suspend fun awaitInitialData(context: Context) {
         refreshData(context, refreshUI = false).join()
     }
+    
+    fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
+        return try {
+            val process = ProcessBuilder("su", "-c", command)
+                .redirectErrorStream(true)
+                .start()
+
+            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                null
+            } else {
+                val output = process.inputStream
+                    .bufferedReader()
+                    .use { it.readText() }
+                    .trim()
+
+                if (process.exitValue() == 0 && output.isNotEmpty()) {
+                    output
+                } else {
+                    null
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     private fun loadCoreData(force: Boolean = false): Job? {
         if (!force && _uiState.value.isCoreDataLoaded) return null
@@ -112,7 +142,57 @@ class HomeViewModel : ViewModel() {
                 val ksuVersion = if (isManager) Natives.version else null
                 val kernelUAPIVersion = if (isManager) Natives.kernelUAPIVersion else null
                 val managerUAPIVersion = Natives.managerUAPIVersion
-                val fullVersion = runCatching { Natives.getFullVersion() }.getOrDefault("Unknown")
+
+                fun getKsudVersion(): String? {
+                    return runRootCommand("for p in /data/adb/ksu/bin/ksud /data/adb/ksud \$(command -v ksud 2>/dev/null); do [ -x \"\$p\" ] && \"\$p\" -V && exit 0; done; exit 1")
+                        ?.lineSequence()
+                        ?.firstOrNull()
+                        ?.replace(Regex("^ksud\\s+"), "")
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { "v$it" }
+                }
+
+                // One su spawn reads all three custom_manager files, tab-delimited.
+                // `exit 0` is required: without it the loop inherits the exit code of the
+                // LAST iteration (hook_type), so a missing hook_type would make runRootCommand
+                // treat the whole command as failed and discard version + working too.
+                val customMap: Map<String, String> =
+                    if (isManager) {
+                        runRootCommand(
+                            "for f in version working hook_type; do " +
+                                    "p=\"/data/local/tmp/.custom_manager/\$f\"; " +
+                                    "[ -f \"\$p\" ] && printf '%s\\t%s\\n' \"\$f\" \"\$(cat \"\$p\")\"; " +
+                                    "done; exit 0"
+                        )
+                            ?.lineSequence()
+                            ?.mapNotNull { line -> line.split('\t', limit = 2).takeIf { it.size == 2 } }
+                            ?.associate { (k, v) -> k to v.trim() }
+                            .orEmpty()
+                    } else {
+                        emptyMap()
+                    }
+
+                val fullVersion =
+                    if (isManager) {
+                        customMap["version"]?.takeIf { it.isNotEmpty() }
+                            ?: try {
+                                Natives.getFullVersion()
+                                    .trim()
+                                    .takeIf { it.isNotEmpty() }
+                                    ?: getKsudVersion()
+                                    ?: "Unknown"
+                            } catch (_: Exception) {
+                                getKsudVersion()
+                                    ?: "Unknown"
+                            }
+                    } else {
+                        null
+                    }
+
+                val customWorking = if (isManager) customMap["working"]?.takeIf { it.isNotEmpty() } else null
+                val customHookType = if (isManager) customMap["hook_type"]?.takeIf { it.isNotEmpty() } else null
+
                 val lkmMode = ksuVersion?.let {
                     if (kernelVersion.isGKI()) Natives.isLkmMode else null
                 }
@@ -134,6 +214,8 @@ class HomeViewModel : ViewModel() {
                     isSELinuxPermissive = runCatching { isSELinuxPermissive() }.getOrDefault(false),
                     isOfficialSignature = runCatching { isOfficialSignature() }.getOrDefault(false),
                     kernelPatchImplement = Natives.getKernelPatchImplement(),
+                    customWorking = customWorking,
+                    customHookType = customHookType,
                 )
                 _uiState.update {
                     it.copy(

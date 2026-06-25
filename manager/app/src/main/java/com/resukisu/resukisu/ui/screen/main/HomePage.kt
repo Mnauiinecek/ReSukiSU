@@ -119,6 +119,34 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
+import java.io.File
+
+fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
+    return try {
+        val process = ProcessBuilder("su", "-c", command)
+            .redirectErrorStream(true)
+            .start()
+
+        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            null
+        } else {
+            val output = process.inputStream
+                .bufferedReader()
+                .use { it.readText() }
+                .trim()
+
+            if (process.exitValue() == 0 && output.isNotEmpty()) {
+                output
+            } else {
+                null
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
 
 /**
  * @author ShirkNeko
@@ -348,6 +376,7 @@ fun HomePage(
                         isHideSusfsStatus = uiState.isHideSusfsStatus,
                         isHideZygiskImplement = uiState.isHideZygiskImplement,
                         isHideMetaModuleImplement = uiState.isHideMetaModuleImplement,
+                        customHookType = uiState.systemStatus.customHookType,
                     )
                 }
 
@@ -540,7 +569,7 @@ private fun StatusCard(
 
                     val workingModeText = when {
                         Natives.isSafeMode -> stringResource(id = R.string.safe_mode)
-                        else -> stringResource(id = R.string.home_working)
+                        else -> systemStatus.customWorking ?: stringResource(id = R.string.home_working)
                     }
 
                     val workingModeSurfaceText = when {
@@ -621,9 +650,11 @@ private fun StatusCard(
                             ),
                     )
 
-                    Column(Modifier
-                        .padding(start = 20.dp)
-                        .weight(1f)) {
+                    Column(
+                        Modifier
+                            .padding(start = 20.dp)
+                            .weight(1f)
+                    ) {
                         Text(
                             text = stringResource(R.string.home_not_installed),
                             style = MaterialTheme.typography.titleMedium,
@@ -762,7 +793,8 @@ private fun InfoCard(
     isSimpleMode: Boolean,
     isHideSusfsStatus: Boolean,
     isHideZygiskImplement: Boolean,
-    isHideMetaModuleImplement: Boolean
+    isHideMetaModuleImplement: Boolean,
+    customHookType: String? = null
 ) {
     ElevatedCard(
         modifier = Modifier
@@ -845,7 +877,7 @@ private fun InfoCard(
             if (!isSimpleMode && ksuIsValid()) {
                 InfoCardItem(
                     stringResource(R.string.home_hook_type),
-                    Natives.getHookType(),
+                    customHookType ?: Natives.getHookType(),
                     icon = Icons.Default.Link
                 )
             }

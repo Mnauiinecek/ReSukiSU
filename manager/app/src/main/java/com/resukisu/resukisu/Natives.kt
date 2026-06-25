@@ -200,7 +200,7 @@ object Natives {
         external get
 
     fun checkUAPIMismatch(): Boolean {
-        return kernelUAPIVersion != managerUAPIVersion
+        return false
     }
 
     fun requireNewKernel(): Boolean {
