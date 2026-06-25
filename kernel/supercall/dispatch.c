@@ -70,9 +70,6 @@ static int do_get_info(void __user *arg)
         cmd.flags |= KSU_GET_INFO_FLAG_BUNDLED;
     }
 #endif
-#ifdef EXPECTED_PR_BUILD_SIZE
-    cmd.flags |= KSU_GET_INFO_FLAG_PR_BUILD;
-#endif
     if (is_manager()) {
         cmd.flags |= KSU_GET_INFO_FLAG_MANAGER;
     }
@@ -115,9 +112,6 @@ static int do_get_info_legacy(void __user *arg)
     if (ksu_late_loaded) {
         cmd.flags |= KSU_GET_INFO_FLAG_LATE_LOAD;
     }
-#ifdef EXPECTED_PR_BUILD_SIZE
-    cmd.flags |= KSU_GET_INFO_FLAG_PR_BUILD;
-#endif
     cmd.features = KSU_FEATURE_MAX;
 
 #ifdef CONFIG_KSU_TOOLKIT_SUPPORT
