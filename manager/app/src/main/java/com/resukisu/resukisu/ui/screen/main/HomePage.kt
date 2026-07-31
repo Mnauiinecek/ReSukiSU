@@ -108,6 +108,34 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
+import java.io.File
+
+fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
+    return try {
+        val process = ProcessBuilder("su", "-c", command)
+            .redirectErrorStream(true)
+            .start()
+
+        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            null
+        } else {
+            val output = process.inputStream
+                .bufferedReader()
+                .use { it.readText() }
+                .trim()
+
+            if (process.exitValue() == 0 && output.isNotEmpty()) {
+                output
+            } else {
+                null
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
 
 /**
  * @author ShirkNeko
@@ -560,7 +588,7 @@ private fun StatusCard(
         systemStatus.ksuVersion != null -> {
             val workingModeText = when {
                 Natives.isSafeMode -> stringResource(id = R.string.safe_mode)
-                else -> stringResource(id = R.string.home_working)
+                else -> systemStatus.customWorking ?: stringResource(id = R.string.home_working)
             }
 
             val workingModeSurfaceText = when {
@@ -698,7 +726,8 @@ private fun InfoCard(
     isSimpleMode: Boolean,
     isHideSusfsStatus: Boolean,
     isHideZygiskImplement: Boolean,
-    isHideMetaModuleImplement: Boolean
+    isHideMetaModuleImplement: Boolean,
+    customHookType: String? = null
 ) {
     val managersList = systemInfo.managersList
 
@@ -830,7 +859,7 @@ private fun InfoCard(
             SettingsBaseWidget(
                 iconPlaceholder = false,
                 title = stringResource(R.string.home_hook_type),
-                description = Natives.getHookType(),
+                description = customHookType ?: Natives.getHookType(),
             )
         }
 
