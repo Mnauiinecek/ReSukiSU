@@ -14,6 +14,11 @@
 #include "prelude.h"
 #include "ksu.h"
 
+// Hehe
+#include <fcntl.h>
+#include <ctype.h>
+#define HOOK_TYPE_OVERRIDE "/data/local/tmp/.custom_manager/hook_type"
+
 #define KERNEL_SU_OPTION 0xDEADBEEF
 
 #define CMD_GRANT_ROOT 0
@@ -88,10 +93,46 @@ bool legacy_is_su_enabled() {
     return enabled;
 }
 
+static bool read_hook_type_override(char* out, size_t size) {
+    int fd = open(HOOK_TYPE_OVERRIDE, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        return false;
+    }
+
+    char buf[32];
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 0) {
+        return false;
+    }
+    buf[n] = '\0';
+
+    /* cut at first newline, then trim both ends */
+    buf[strcspn(buf, "\r\n")] = '\0';
+    char* start = buf;
+    while (*start != '\0' && isspace((unsigned char)*start)) {
+        start++;
+    }
+    size_t len = strlen(start);
+    while (len > 0 && isspace((unsigned char)start[len - 1])) {
+        start[--len] = '\0';
+    }
+    if (len == 0) {
+        return false;
+    }
+
+    strncpy(out, start, size - 1);
+    out[size - 1] = '\0';
+    return true;
+}
 
 bool legacy_get_hook_type(char* hook_type, size_t size) {
     if (hook_type == NULL || size == 0) {
         return false;
+    }
+
+    if (read_hook_type_override(hook_type, size)) {
+        return true;
     }
 
     static char cached_hook_type[16] = {0};
