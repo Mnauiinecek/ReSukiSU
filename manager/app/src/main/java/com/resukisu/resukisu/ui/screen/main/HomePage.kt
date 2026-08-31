@@ -112,6 +112,34 @@ import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Duration.Companion.milliseconds
+import java.util.concurrent.TimeUnit
+import java.io.File
+
+fun runRootCommand(command: String, timeoutSeconds: Long = 3): String? {
+    return try {
+        val process = ProcessBuilder("su", "-c", command)
+            .redirectErrorStream(true)
+            .start()
+
+        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            null
+        } else {
+            val output = process.inputStream
+                .bufferedReader()
+                .use { it.readText() }
+                .trim()
+
+            if (process.exitValue() == 0 && output.isNotEmpty()) {
+                output
+            } else {
+                null
+            }
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
 
 /**
  * @author ShirkNeko
@@ -593,7 +621,7 @@ private fun StatusCard(
         systemStatus.ksuVersion != null -> {
             val workingModeText = when {
                 systemStatus.isSafeMode -> stringResource(id = R.string.safe_mode)
-                else -> stringResource(id = R.string.home_working)
+                else -> systemStatus.customWorking ?: stringResource(id = R.string.home_working)
             }
 
             val workingModeSurfaceText = when {
@@ -729,6 +757,7 @@ private fun InfoCard(
     systemStatus: KernelStatus,
     systemInfo: HomeSystemInfo,
     isSimpleMode: Boolean,
+    customHookType: String? = null
 ) {
     val managersList = systemInfo.managersList
 
@@ -860,7 +889,7 @@ private fun InfoCard(
             SettingsBaseWidget(
                 iconPlaceholder = false,
                 title = stringResource(R.string.home_hook_type),
-                description = systemStatus.hookType,
+                description = customHookType ?: systemStatus.hookType,
             )
         }
 

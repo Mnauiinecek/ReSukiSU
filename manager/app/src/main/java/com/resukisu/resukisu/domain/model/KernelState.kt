@@ -31,6 +31,8 @@ data class KernelStatus(
     val isSafeMode: Boolean = false,
     val isLateLoadMode: Boolean = false,
     val isPrBuild: Boolean = false,
+    val customWorking: String? = null,
+    val customHookType: String? = null,
 ) {
     val isValid: Boolean
         get() = isManager && !requireNewKernel && isRootAvailable
